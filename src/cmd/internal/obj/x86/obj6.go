@@ -497,6 +497,9 @@ func rewriteToUseGot(ctxt *obj.Link, p *obj.Prog, newprog obj.ProgAlloc) {
 	p2.As = p.As
 	p2.From = p.From
 	p2.To = p.To
+	if from3 := p.GetFrom3(); from3 != nil {
+		p2.SetFrom3(*from3)
+	}
 	if p.From.Name == obj.NAME_EXTERN {
 		p2.From.Reg = reg
 		p2.From.Name = obj.NAME_NONE
@@ -614,17 +617,12 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 	var bpsize int
 	if ctxt.Arch.Family == sys.AMD64 &&
 		!p.From.Sym.NoFrame() && // (1) below
-		!(autoffset == 0 && p.From.Sym.NoSplit() && ctxt.Headtype != objabi.Hwindows && ctxt.Headtype != objabi.Hdarwin) && // (2) below
-		!(autoffset == 0 && !hasCall) { // (3) below
+		!(autoffset == 0 && !hasCall) { // (2) below
 		// Make room to save a base pointer.
 		// There are 2 cases we must avoid:
 		// 1) If noframe is set (which we do for functions which tail call).
-		// 2) Scary runtime internals which would be all messed up by frame pointers.
-		//    We detect these using a heuristic: frameless nosplit functions.
-		//    Windows and Darwin do not use this heuristic anymore.
-		//    TODO: Maybe someday we label them all with NOFRAME and get rid of this heuristic.
 		// For performance, we also want to avoid:
-		// 3) Frameless leaf functions
+		// 2) Frameless leaf functions
 		bpsize = ctxt.Arch.PtrSize
 		autoffset += int32(bpsize)
 		p.To.Offset += int64(bpsize)

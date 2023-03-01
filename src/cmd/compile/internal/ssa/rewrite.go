@@ -1298,6 +1298,10 @@ func zeroUpper32Bits(x *Value, depth int) bool {
 		OpAMD64SHRL, OpAMD64SHRLconst, OpAMD64SARL, OpAMD64SARLconst,
 		OpAMD64SHLL, OpAMD64SHLLconst:
 		return true
+	case OpARM64REV16W, OpARM64REVW, OpARM64RBITW, OpARM64CLZW, OpARM64EXTRWconst,
+		OpARM64MULW, OpARM64MNEGW, OpARM64UDIVW, OpARM64DIVW, OpARM64UMODW,
+		OpARM64MADDW, OpARM64MSUBW, OpARM64RORW, OpARM64RORWconst:
+		return true
 	case OpArg:
 		return x.Type.Size() == 4
 	case OpPhi, OpSelect0, OpSelect1:
@@ -1365,10 +1369,16 @@ func zeroUpper56Bits(x *Value, depth int) bool {
 	return false
 }
 
-func isInlinableMemclr(c *Config) bool {
+func isInlinableMemclr(c *Config, sz int64) bool {
 	// TODO: expand this check to allow other architectures
 	// see CL 454255 and issue 56997
-	return c.arch == "amd64" || c.arch == "arm64"
+	switch c.arch {
+	case "amd64", "arm64":
+		return true
+	case "ppc64le", "ppc64":
+		return sz < 512
+	}
+	return false
 }
 
 // isInlinableMemmove reports whether the given arch performs a Move of the given size
