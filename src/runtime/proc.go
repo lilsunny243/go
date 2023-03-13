@@ -312,10 +312,10 @@ func forcegchelper() {
 	}
 }
 
-//go:nosplit
-
 // Gosched yields the processor, allowing other goroutines to run. It does not
 // suspend the current goroutine, so execution resumes automatically.
+//
+//go:nosplit
 func Gosched() {
 	checkTimeouts()
 	mcall(gosched_m)
@@ -4516,8 +4516,6 @@ func dolockOSThread() {
 	gp.lockedm.set(gp.m)
 }
 
-//go:nosplit
-
 // LockOSThread wires the calling goroutine to its current operating system thread.
 // The calling goroutine will always execute in that thread,
 // and no other goroutine will execute in it,
@@ -4532,6 +4530,8 @@ func dolockOSThread() {
 //
 // A goroutine should call LockOSThread before calling OS services or
 // non-Go library functions that depend on per-thread state.
+//
+//go:nosplit
 func LockOSThread() {
 	if atomic.Load(&newmHandoff.haveTemplateThread) == 0 && GOOS != "plan9" {
 		// If we need to start a new thread from the locked
@@ -4571,8 +4571,6 @@ func dounlockOSThread() {
 	gp.lockedm = 0
 }
 
-//go:nosplit
-
 // UnlockOSThread undoes an earlier call to LockOSThread.
 // If this drops the number of active LockOSThread calls on the
 // calling goroutine to zero, it unwires the calling goroutine from
@@ -4585,6 +4583,8 @@ func dounlockOSThread() {
 // other goroutines, it should not call this function and thus leave
 // the goroutine locked to the OS thread until the goroutine (and
 // hence the thread) exits.
+//
+//go:nosplit
 func UnlockOSThread() {
 	gp := getg()
 	if gp.m.lockedExt == 0 {
@@ -4687,6 +4687,7 @@ func sigprof(pc, sp, lr uintptr, gp *g, mp *m) {
 	// See golang.org/issue/17165.
 	getg().m.mallocing++
 
+	var u unwinder
 	var stk [maxCPUProfStack]uintptr
 	n := 0
 	if mp.ncgo > 0 && mp.curg != nil && mp.curg.syscallpc != 0 && mp.curg.syscallsp != 0 {
@@ -4700,26 +4701,24 @@ func sigprof(pc, sp, lr uintptr, gp *g, mp *m) {
 			for cgoOff < len(mp.cgoCallers) && mp.cgoCallers[cgoOff] != 0 {
 				cgoOff++
 			}
-			copy(stk[:], mp.cgoCallers[:cgoOff])
+			n += copy(stk[:], mp.cgoCallers[:cgoOff])
 			mp.cgoCallers[0] = 0
 		}
 
 		// Collect Go stack that leads to the cgo call.
-		n = gentraceback(mp.curg.syscallpc, mp.curg.syscallsp, 0, mp.curg, 0, &stk[cgoOff], len(stk)-cgoOff, nil, nil, 0)
-		if n > 0 {
-			n += cgoOff
-		}
+		u.initAt(mp.curg.syscallpc, mp.curg.syscallsp, 0, mp.curg, unwindSilentErrors)
 	} else if usesLibcall() && mp.libcallg != 0 && mp.libcallpc != 0 && mp.libcallsp != 0 {
 		// Libcall, i.e. runtime syscall on windows.
 		// Collect Go stack that leads to the call.
-		n = gentraceback(mp.libcallpc, mp.libcallsp, 0, mp.libcallg.ptr(), 0, &stk[n], len(stk[n:]), nil, nil, 0)
+		u.initAt(mp.libcallpc, mp.libcallsp, 0, mp.libcallg.ptr(), unwindSilentErrors)
 	} else if mp != nil && mp.vdsoSP != 0 {
 		// VDSO call, e.g. nanotime1 on Linux.
 		// Collect Go stack that leads to the call.
-		n = gentraceback(mp.vdsoPC, mp.vdsoSP, 0, gp, 0, &stk[n], len(stk[n:]), nil, nil, _TraceJumpStack)
+		u.initAt(mp.vdsoPC, mp.vdsoSP, 0, gp, unwindSilentErrors|unwindJumpStack)
 	} else {
-		n = gentraceback(pc, sp, lr, gp, 0, &stk[0], len(stk), nil, nil, _TraceTrap|_TraceJumpStack)
+		u.initAt(pc, sp, lr, gp, unwindSilentErrors|unwindTrap|unwindJumpStack)
 	}
+	n += tracebackPCs(&u, 0, stk[n:])
 
 	if n <= 0 {
 		// Normal traceback is impossible or has failed.

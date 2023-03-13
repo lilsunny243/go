@@ -159,8 +159,10 @@ and test commands:
 		run through go run and go test respectively.
 	-pgo file
 		specify the file path of a profile for profile-guided optimization (PGO).
-		Special name "auto" lets the go command select a file named
-		"default.pgo" in the main package's directory if that file exists.
+		When the special name "auto" is specified, for each main package in the
+		build, the go command selects a file named "default.pgo" in the package's
+		directory if that file exists, and applies it to the (transitive)
+		dependencies of the main package (other packages are not affected).
 		Special name "off" turns off PGO.
 	-pkgdir dir
 		install and load all packages from dir instead of the usual locations.
@@ -600,7 +602,8 @@ Starting in Go 1.20, the standard library is built and cached but not installed.
 Setting GODEBUG=installgoroot=all restores the use of
 $GOROOT/pkg/$GOOS_$GOARCH.
 
-For more about the build flags, see 'go help build'.
+For more about build flags, see 'go help build'.
+
 For more about specifying packages, see 'go help packages'.
 
 See also: go build, go get, go clean.

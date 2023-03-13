@@ -1081,6 +1081,18 @@ func (r *reader) funcExt(name *ir.Name, method *types.Sym) {
 	fn.Pragma = r.pragmaFlag()
 	r.linkname(name)
 
+	if buildcfg.GOARCH == "wasm" {
+		xmod := r.String()
+		xname := r.String()
+
+		if xmod != "" && xname != "" {
+			fn.WasmImport = &ir.WasmImport{
+				Module: xmod,
+				Name:   xname,
+			}
+		}
+	}
+
 	typecheck.Func(fn)
 
 	if r.Bool() {
@@ -1845,7 +1857,7 @@ func (r *reader) forStmt(label *types.Sym) ir.Node {
 
 	if r.Bool() {
 		pos := r.pos()
-		rang := ir.NewRangeStmt(pos, nil, nil, nil, nil)
+		rang := ir.NewRangeStmt(pos, nil, nil, nil, nil, false)
 		rang.Label = label
 
 		names, lhs := r.assignList()
@@ -1869,6 +1881,7 @@ func (r *reader) forStmt(label *types.Sym) ir.Node {
 		}
 
 		rang.Body = r.blockStmt()
+		rang.DistinctVars = r.Bool()
 		r.closeAnotherScope()
 
 		return rang
@@ -1879,9 +1892,10 @@ func (r *reader) forStmt(label *types.Sym) ir.Node {
 	cond := r.optExpr()
 	post := r.stmt()
 	body := r.blockStmt()
+	dv := r.Bool()
 	r.closeAnotherScope()
 
-	stmt := ir.NewForStmt(pos, init, cond, post, body)
+	stmt := ir.NewForStmt(pos, init, cond, post, body, dv)
 	stmt.Label = label
 	return stmt
 }
@@ -2184,7 +2198,18 @@ func (r *reader) expr() (res ir.Node) {
 			}
 
 			n := typecheck.Expr(ir.NewSelectorExpr(pos, ir.OXDOT, recv, wrapperFn.Sel)).(*ir.SelectorExpr)
-			assert(n.Selection == wrapperFn.Selection)
+
+			// As a consistency check here, we make sure "n" selected the
+			// same method (represented by a types.Field) that wrapperFn
+			// selected. However, for anonymous receiver types, there can be
+			// multiple such types.Field instances (#58563). So we may need
+			// to fallback to making sure Sym and Type (including the
+			// receiver parameter's type) match.
+			if n.Selection != wrapperFn.Selection {
+				assert(n.Selection.Sym == wrapperFn.Selection.Sym)
+				assert(types.Identical(n.Selection.Type, wrapperFn.Selection.Type))
+				assert(types.Identical(n.Selection.Type.Recv().Type, wrapperFn.Selection.Type.Recv().Type))
+			}
 
 			wrapper := methodValueWrapper{
 				rcvr:   n.X.Type(),
@@ -2343,7 +2368,7 @@ func (r *reader) expr() (res ir.Node) {
 				if recv.Type().IsInterface() {
 					// N.B., this happens currently for typeparam/issue51521.go
 					// and typeparam/typeswitch3.go.
-					if base.Flag.LowerM > 0 {
+					if base.Flag.LowerM != 0 {
 						base.WarnfAt(method.Pos(), "imprecise interface call")
 					}
 				}

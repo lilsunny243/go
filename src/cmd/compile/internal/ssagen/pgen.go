@@ -214,7 +214,7 @@ func Compile(fn *ir.Func, worker int) {
 	// If we're compiling the package init function, search for any
 	// relocations that target global map init outline functions and
 	// turn them into weak relocs.
-	if base.Flag.WrapGlobalMapInit && fn.IsPackageInit() {
+	if fn.IsPackageInit() && base.Debug.WrapGlobalMapCtl != 1 {
 		weakenGlobalMapInitRelocs(fn)
 	}
 
@@ -327,9 +327,9 @@ func CheckLargeStacks() {
 	})
 	for _, large := range largeStackFrames {
 		if large.callee != 0 {
-			base.ErrorfAt(large.pos, "stack frame too large (>1GB): %d MB locals + %d MB args + %d MB callee", large.locals>>20, large.args>>20, large.callee>>20)
+			base.ErrorfAt(large.pos, 0, "stack frame too large (>1GB): %d MB locals + %d MB args + %d MB callee", large.locals>>20, large.args>>20, large.callee>>20)
 		} else {
-			base.ErrorfAt(large.pos, "stack frame too large (>1GB): %d MB locals + %d MB args", large.locals>>20, large.args>>20)
+			base.ErrorfAt(large.pos, 0, "stack frame too large (>1GB): %d MB locals + %d MB args", large.locals>>20, large.args>>20)
 		}
 	}
 }

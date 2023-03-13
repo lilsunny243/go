@@ -227,7 +227,10 @@ func main() {
 		}
 		switch entry.Tag {
 		case dwarf.TagStructType:
-			name := entry.Val(dwarf.AttrName).(string)
+			name, ok := entry.Val(dwarf.AttrName).(string)
+			if !ok {
+				continue
+			}
 			wantMembers := want[name]
 			if wantMembers == nil {
 				continue
@@ -274,7 +277,7 @@ func TestSizes(t *testing.T) {
 	}
 
 	// External linking may bring in C symbols with unknown size. Skip.
-	testenv.MustInternalLink(t)
+	testenv.MustInternalLink(t, false)
 
 	t.Parallel()
 
@@ -882,14 +885,16 @@ func TestAbstractOriginSanityIssue26237(t *testing.T) {
 
 func TestRuntimeTypeAttrInternal(t *testing.T) {
 	testenv.MustHaveGoBuild(t)
-	testenv.MustInternalLink(t)
+	testenv.MustInternalLink(t, false)
 
 	if runtime.GOOS == "plan9" {
 		t.Skip("skipping on plan9; no DWARF symbol table in executables")
 	}
 
-	if runtime.GOOS == "windows" {
-		t.Skip("skipping on windows; test is incompatible with relocatable binaries")
+	// TODO(#58807): factor this condition out into a function in
+	// internal/platform so that it won't get out of sync with cmd/link.
+	if runtime.GOOS == "android" || runtime.GOOS == "windows" {
+		t.Skipf("skipping on %s; test is incompatible with relocatable binaries", runtime.GOOS)
 	}
 
 	testRuntimeTypeAttr(t, "-ldflags=-linkmode=internal")
@@ -980,8 +985,10 @@ func main() {
 		t.Fatalf("*main.X DIE had no runtime type attr. DIE: %v", dies[0])
 	}
 
-	if runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" {
-		return // everything is PIE on ARM64, addresses are relocated
+	// TODO(#58807): factor this condition out into a function in
+	// internal/platform so that it won't get out of sync with cmd/link.
+	if (runtime.GOOS == "darwin" && runtime.GOARCH == "arm64") || runtime.GOOS == "android" {
+		return // everything is PIE, addresses are relocated
 	}
 	if rtAttr.(uint64)+types.Addr != addr {
 		t.Errorf("DWARF type offset was %#x+%#x, but test program said %#x", rtAttr.(uint64), types.Addr, addr)
@@ -1165,7 +1172,7 @@ func main() {
 	// TODO: maybe there is some way to tell the external linker not to put
 	// those symbols in the executable's symbol table? Prefix the symbol name
 	// with "." or "L" to pretend it is a label?
-	if !testenv.CanInternalLink() {
+	if !testenv.CanInternalLink(false) {
 		return
 	}
 
@@ -1548,6 +1555,7 @@ func TestIssue39757(t *testing.T) {
 
 func TestIssue42484(t *testing.T) {
 	testenv.MustHaveGoBuild(t)
+	testenv.MustInternalLink(t, false) // Avoid spurious failures from external linkers.
 
 	if runtime.GOOS == "plan9" {
 		t.Skip("skipping on plan9; no DWARF symbol table in executables")

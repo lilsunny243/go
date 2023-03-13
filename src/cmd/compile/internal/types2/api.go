@@ -27,6 +27,7 @@ import (
 	"cmd/compile/internal/syntax"
 	"fmt"
 	"go/constant"
+	. "internal/types/errors"
 	"strings"
 )
 
@@ -39,6 +40,7 @@ type Error struct {
 	Msg  string     // default error message, user-friendly
 	Full string     // full error message, for debugging (may contain internal details)
 	Soft bool       // if set, error is "soft"
+	Code Code       // error code
 }
 
 // Error returns an error string formatted as follows:
@@ -442,7 +444,7 @@ func AssertableTo(V *Interface, T Type) bool {
 	if T.Underlying() == Typ[Invalid] {
 		return false
 	}
-	return (*Checker)(nil).newAssertableTo(V, T)
+	return (*Checker)(nil).newAssertableTo(V, T, nil)
 }
 
 // AssignableTo reports whether a value of type V is assignable to a variable

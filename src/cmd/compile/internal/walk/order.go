@@ -303,7 +303,7 @@ func (o *orderState) mapKeyTemp(outerPos src.XPos, t *types.Type, n ir.Node) ir.
 // For:
 //
 //	x = m[string(k)]
-//	x = m[T1{... Tn{..., string(k), ...}]
+//	x = m[T1{... Tn{..., string(k), ...}}]
 //
 // where k is []byte, T1 to Tn is a nesting of struct and array literals,
 // the allocation of backing bytes for the string can be avoided
@@ -433,9 +433,9 @@ func (o *orderState) edge() {
 	// freezes the counter when it reaches the value of 255. However, a range
 	// of experiments showed that that decreases overall performance.
 	o.append(ir.NewIfStmt(base.Pos,
-		ir.NewBinaryExpr(base.Pos, ir.OEQ, counter, ir.NewInt(0xff)),
-		[]ir.Node{ir.NewAssignStmt(base.Pos, counter, ir.NewInt(1))},
-		[]ir.Node{ir.NewAssignOpStmt(base.Pos, ir.OADD, counter, ir.NewInt(1))}))
+		ir.NewBinaryExpr(base.Pos, ir.OEQ, counter, ir.NewInt(base.Pos, 0xff)),
+		[]ir.Node{ir.NewAssignStmt(base.Pos, counter, ir.NewInt(base.Pos, 1))},
+		[]ir.Node{ir.NewAssignOpStmt(base.Pos, ir.OADD, counter, ir.NewInt(base.Pos, 1))}))
 }
 
 // orderBlock orders the block of statements in n into a new slice,
